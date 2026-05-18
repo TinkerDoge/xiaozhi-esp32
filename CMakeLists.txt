@@ -2,6 +2,9 @@
 # CMakeLists in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.16)
 
+# Force ninja to use response files to avoid Windows command-line length limit
+set(CMAKE_NINJA_FORCE_RESPONSE_FILE ON CACHE BOOL "" FORCE)
+
 # Add this line to disable the specific warning
 add_compile_options(-Wno-missing-field-initializers)
 
