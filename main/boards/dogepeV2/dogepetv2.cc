@@ -193,8 +193,8 @@ public:
             GetBacklight()->RestoreBrightness();
         }
 
-        ai_app_ = new AiApp();
-        video_app_ = new VideoApp(mjpeg_player_);
+        ai_app_ = new AiApp(display_);
+        video_app_ = new VideoApp(mjpeg_player_, display_);
         current_app_ = ai_app_;
         current_app_->OnStart();
     }

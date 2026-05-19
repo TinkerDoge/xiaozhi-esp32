@@ -1,18 +1,18 @@
 #include "ai_app.h"
 #include "application.h"
+#include "display/display.h"
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
 
 static const char* TAG = "AiApp";
 
-AiApp::AiApp() {}
+AiApp::AiApp(Display* display) : display_(display) {}
 
 void AiApp::OnStart() {
     ESP_LOGI(TAG, "Starting AI App");
     lvgl_port_resume();
-    auto* display = Application::GetInstance().GetBoard().GetDisplay();
-    if (display) {
-        display->SetPowerSaveMode(false);
+    if (display_) {
+        display_->SetPowerSaveMode(false);
     }
     Application::GetInstance().GetAudioService().EnableWakeWordDetection(true);
 }
@@ -27,14 +27,13 @@ void AiApp::OnStop() {
 }
 
 void AiApp::OnButtonAClick() {
-    auto* display = Application::GetInstance().GetBoard().GetDisplay();
     if (!conversation_active_) {
         Application::GetInstance().StartListening();
         conversation_active_ = true;
-        if (display) display->ShowNotification("AI ON");
+        if (display_) display_->ShowNotification("AI ON");
     } else {
         Application::GetInstance().StopListening();
         conversation_active_ = false;
-        if (display) display->ShowNotification("AI OFF");
+        if (display_) display_->ShowNotification("AI OFF");
     }
 }

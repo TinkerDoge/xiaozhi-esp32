@@ -1,22 +1,22 @@
 #include "video_app.h"
 #include "application.h"
+#include "display/display.h"
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
 
 static const char* TAG = "VideoApp";
 
-VideoApp::VideoApp(MjpegPlayer* player) : mjpeg_player_(player) {}
+VideoApp::VideoApp(MjpegPlayer* player, Display* display) : mjpeg_player_(player), display_(display) {}
 
 void VideoApp::OnStart() {
     ESP_LOGI(TAG, "Starting Video App");
-    auto* display = Application::GetInstance().GetBoard().GetDisplay();
     if (!mjpeg_player_ || !mjpeg_player_->IsSdMounted()) {
-        if (display) display->ShowNotification("No SD");
+        if (display_) display_->ShowNotification("No SD");
         return;
     }
     
-    if (display) {
-        display->SetPowerSaveMode(true);
+    if (display_) {
+        display_->SetPowerSaveMode(true);
     }
     lvgl_port_stop(); // Pause LVGL rendering loop to free SPI bus
 
@@ -24,9 +24,9 @@ void VideoApp::OnStart() {
     if (!mjpeg_player_->Start()) {
         video_mode_ = false;
         lvgl_port_resume();
-        if (display) {
-            display->SetPowerSaveMode(false);
-            display->ShowNotification("No Video");
+        if (display_) {
+            display_->SetPowerSaveMode(false);
+            display_->ShowNotification("No Video");
         }
     }
 }
