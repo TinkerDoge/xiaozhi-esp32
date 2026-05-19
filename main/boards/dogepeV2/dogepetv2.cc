@@ -10,6 +10,10 @@
 #include "adc_battery_monitor.h"
 #include "assets/lang_config.h"
 #include "mjpeg_player.h"
+#include "base_app.h"
+#include "ai_app.h"
+#include "video_app.h"
+#include <esp_lvgl_port.h>
 
 #include <wifi_station.h>
 #include <esp_log.h>
@@ -25,13 +29,14 @@ private:
     Button boot_button_;
     Button btn_a_;
     Button btn_b_;
-    bool conversation_active_ = false;
+    BaseApp* current_app_ = nullptr;
+    AiApp* ai_app_ = nullptr;
+    VideoApp* video_app_ = nullptr;
     LcdDisplay* display_ = nullptr;
     esp_lcd_panel_handle_t raw_panel_ = nullptr;  // raw panel handle for direct video rendering
     PowerSaveTimer* power_save_timer_ = nullptr;
     AdcBatteryMonitor* adc_battery_monitor_ = nullptr;
     MjpegPlayer* mjpeg_player_ = nullptr;
-    bool video_mode_ = false;
 
     void InitializeSpi() {
         spi_bus_config_t buscfg = {};
@@ -98,48 +103,26 @@ private:
 
         // When playback finishes, restore LVGL display
         mjpeg_player_->OnFinished([this]() {
-            video_mode_ = false;
+            lvgl_port_resume(); // Resume LVGL rendering loop
             if (display_) {
                 display_->SetPowerSaveMode(false);  // Re-enable LVGL rendering
             }
+            if (power_save_timer_) power_save_timer_->SetEnabled(true);
             ESP_LOGI(TAG, "Video playback finished, LVGL restored");
         });
     }
 
-    void ToggleVideoMode() {
-        if (video_mode_) {
-            // Stop video, restore LVGL
-            if (mjpeg_player_) mjpeg_player_->Stop();
-            video_mode_ = false;
-            if (display_) {
-                display_->SetPowerSaveMode(false);
-            }
-            ESP_LOGI(TAG, "Video mode OFF");
+    void SwitchApp() {
+        if (!current_app_) return;
+        current_app_->OnStop();
+        
+        if (current_app_ == ai_app_) {
+            current_app_ = video_app_;
         } else {
-            // Start video, pause LVGL
-            if (!mjpeg_player_ || !mjpeg_player_->IsSdMounted()) {
-                if (display_) display_->ShowNotification("No SD");
-                return;
-            }
-            // Stop AI conversation if active
-            if (conversation_active_) {
-                Application::GetInstance().StopListening();
-                conversation_active_ = false;
-            }
-            // Pause LVGL rendering
-            if (display_) {
-                display_->SetPowerSaveMode(true);
-            }
-            video_mode_ = true;
-            if (!mjpeg_player_->Start()) {
-                video_mode_ = false;
-                if (display_) {
-                    display_->SetPowerSaveMode(false);
-                    display_->ShowNotification("No Video");
-                }
-            }
-            ESP_LOGI(TAG, "Video mode ON");
+            current_app_ = ai_app_;
         }
+        
+        current_app_->OnStart();
     }
 
     void InitializeButtons() {
@@ -157,16 +140,13 @@ private:
         // Button A: click = toggle AI conversation, long press = sleep
         btn_a_.OnClick([this]() {
             if (power_save_timer_) power_save_timer_->WakeUp();
-            ToggleConversationMode();
+            if (current_app_) current_app_->OnButtonAClick();
         });
         btn_a_.OnLongPress([this]() {
             // Say goodbye and enter sleep mode
             if (display_) display_->ShowNotification("BYE");
             Application::GetInstance().PlaySound(Lang::Sounds::OGG_SUCCESS);
-            if (conversation_active_) {
-                Application::GetInstance().StopListening();
-                conversation_active_ = false;
-            }
+            if (current_app_) current_app_->OnStop();
             if (auto d = GetDisplay()) d->SetPowerSaveMode(true);
             if (auto bl = GetBacklight()) bl->SetBrightness(0);
         });
@@ -174,24 +154,15 @@ private:
         // Button B: click = wake, long press = toggle video player mode
         btn_b_.OnClick([this]() {
             if (power_save_timer_) power_save_timer_->WakeUp();
+            if (current_app_) current_app_->OnButtonBClick();
         });
         btn_b_.OnLongPress([this]() {
             if (power_save_timer_) power_save_timer_->WakeUp();
-            ToggleVideoMode();
+            SwitchApp();
         });
     }
 
-    void ToggleConversationMode() {
-        if (!conversation_active_) {
-            Application::GetInstance().StartListening();
-            conversation_active_ = true;
-            if (display_) display_->ShowNotification("AI ON");
-        } else {
-            Application::GetInstance().StopListening();
-            conversation_active_ = false;
-            if (display_) display_->ShowNotification("AI OFF");
-        }
-    }
+
 
 public:
     DogePet() :
@@ -207,11 +178,7 @@ public:
         // Idle power save: screen dims/sleeps when idle; restore on activity
         power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
         power_save_timer_->OnEnterSleepMode([this]() {
-            // Stop video if playing before entering sleep
-            if (video_mode_ && mjpeg_player_) {
-                mjpeg_player_->Stop();
-                video_mode_ = false;
-            }
+            if (current_app_) current_app_->OnStop();
             if (display_) display_->ShowNotification("BYE");
             Application::GetInstance().PlaySound(Lang::Sounds::OGG_SUCCESS);
             if (auto bl = GetBacklight()) bl->SetBrightness(5);
@@ -225,6 +192,11 @@ public:
         if (DISPLAY_BACKLIGHT_PIN != GPIO_NUM_NC) {
             GetBacklight()->RestoreBrightness();
         }
+
+        ai_app_ = new AiApp();
+        video_app_ = new VideoApp(mjpeg_player_);
+        current_app_ = ai_app_;
+        current_app_->OnStart();
     }
 
     virtual Led* GetLed() override {
