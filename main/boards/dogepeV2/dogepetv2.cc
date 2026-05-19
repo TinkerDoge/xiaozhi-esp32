@@ -101,14 +101,12 @@ private:
             ESP_LOGW(TAG, "SD card not available — video player disabled");
         }
 
-        // When playback finishes, restore LVGL display
+        // When playback finishes, automatically switch back to AiApp
         mjpeg_player_->OnFinished([this]() {
-            lvgl_port_resume(); // Resume LVGL rendering loop
-            if (display_) {
-                display_->SetPowerSaveMode(false);  // Re-enable LVGL rendering
+            if (current_app_ == video_app_) {
+                ESP_LOGI(TAG, "Video playback finished naturally, switching back to AI App");
+                SwitchApp();
             }
-            if (power_save_timer_) power_save_timer_->SetEnabled(true);
-            ESP_LOGI(TAG, "Video playback finished, LVGL restored");
         });
     }
 
@@ -194,7 +192,7 @@ public:
         }
 
         ai_app_ = new AiApp(display_);
-        video_app_ = new VideoApp(mjpeg_player_, display_);
+        video_app_ = new VideoApp(mjpeg_player_, display_, power_save_timer_);
         current_app_ = ai_app_;
         current_app_->OnStart();
     }

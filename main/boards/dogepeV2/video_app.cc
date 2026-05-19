@@ -4,15 +4,26 @@
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
 
+#include "power_save_timer.h"
+#include <esp_wifi.h>
+
 static const char* TAG = "VideoApp";
 
-VideoApp::VideoApp(MjpegPlayer* player, Display* display) : mjpeg_player_(player), display_(display) {}
+VideoApp::VideoApp(MjpegPlayer* player, Display* display, PowerSaveTimer* timer) 
+    : mjpeg_player_(player), display_(display), power_save_timer_(timer) {}
 
 void VideoApp::OnStart() {
     ESP_LOGI(TAG, "Starting Video App");
     if (!mjpeg_player_ || !mjpeg_player_->IsSdMounted()) {
         if (display_) display_->ShowNotification("No SD");
         return;
+    }
+    
+    // Completely isolate video app by suspending AI/WiFi interference
+    esp_wifi_stop();
+    if (power_save_timer_) {
+        power_save_timer_->WakeUp();
+        power_save_timer_->SetEnabled(false);
     }
     
     if (display_) {
@@ -28,6 +39,8 @@ void VideoApp::OnStart() {
             display_->SetPowerSaveMode(false);
             display_->ShowNotification("No Video");
         }
+        if (power_save_timer_) power_save_timer_->SetEnabled(true);
+        esp_wifi_start();
     }
 }
 
@@ -37,4 +50,7 @@ void VideoApp::OnStop() {
         mjpeg_player_->Stop();
         video_mode_ = false;
     }
+    // Restore AI/WiFi functions
+    esp_wifi_start();
+    if (power_save_timer_) power_save_timer_->SetEnabled(true);
 }
