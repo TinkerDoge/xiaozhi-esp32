@@ -5,6 +5,8 @@
 #include <esp_lvgl_port.h>
 
 #include "power_save_timer.h"
+#include "wifi_manager.h"
+#include "board.h"
 #include <esp_wifi.h>
 
 static const char* TAG = "VideoApp";
@@ -20,7 +22,13 @@ void VideoApp::OnStart() {
     }
     
     // Completely isolate video app by suspending AI/WiFi interference
-    esp_wifi_stop();
+    WifiManager::GetInstance().StopStation();
+    Application::GetInstance().ResetProtocol(); // Disconnect MQTT completely
+    
+    if (auto codec = Board::GetInstance().GetAudioCodec()) {
+        codec->EnableInput(false); // Stop I2S DMA completely
+    }
+
     if (power_save_timer_) {
         power_save_timer_->WakeUp();
         power_save_timer_->SetEnabled(false);
@@ -40,7 +48,7 @@ void VideoApp::OnStart() {
             display_->ShowNotification("No Video");
         }
         if (power_save_timer_) power_save_timer_->SetEnabled(true);
-        esp_wifi_start();
+        WifiManager::GetInstance().StartStation();
     }
 }
 
@@ -50,7 +58,12 @@ void VideoApp::OnStop() {
         mjpeg_player_->Stop();
         video_mode_ = false;
     }
+    
     // Restore AI/WiFi functions
-    esp_wifi_start();
+    WifiManager::GetInstance().StartStation();
+    
+    // Trigger activation to reconnect MQTT
+    Application::GetInstance().SetDeviceState(kDeviceStateStarting);
+    
     if (power_save_timer_) power_save_timer_->SetEnabled(true);
 }
