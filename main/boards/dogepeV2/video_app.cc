@@ -21,8 +21,12 @@ void VideoApp::OnStart() {
         return;
     }
     
-    // Completely isolate video app by suspending AI backend (keep Wi-Fi connected to avoid reconnect storms)
+    // Completely isolate video app by suspending AI backend
     Application::GetInstance().ResetProtocol(); // Disconnect MQTT completely
+    vTaskDelay(pdMS_TO_TICKS(100)); // Give protocol time to gracefully close sockets
+    
+    // Physically turn off Wi-Fi radio to prevent hardware starvation and forced reconnects
+    WifiManager::GetInstance().StopStation();
     
     if (auto codec = Board::GetInstance().GetAudioCodec()) {
         codec->EnableInput(false); // Stop I2S DMA completely
@@ -47,6 +51,8 @@ void VideoApp::OnStart() {
             display_->ShowNotification("No Video");
         }
         if (power_save_timer_) power_save_timer_->SetEnabled(true);
+        WifiManager::GetInstance().StartStation();
+        Application::GetInstance().SetDeviceState(kDeviceStateStarting);
     }
 }
 
@@ -57,7 +63,8 @@ void VideoApp::OnStop() {
         video_mode_ = false;
     }
     
-    // Trigger activation to reconnect MQTT (Wi-Fi is still connected)
+    // Restore Wi-Fi and MQTT
+    WifiManager::GetInstance().StartStation();
     Application::GetInstance().SetDeviceState(kDeviceStateStarting);
     
     if (power_save_timer_) power_save_timer_->SetEnabled(true);
