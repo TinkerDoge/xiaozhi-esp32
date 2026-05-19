@@ -59,7 +59,6 @@ void VideoApp::OnStop() {
     
     // Trigger activation to reconnect MQTT (Wi-Fi is still connected)
     Application::GetInstance().SetDeviceState(kDeviceStateStarting);
-    Application::GetInstance().HandleNetworkConnectedEvent();
     
     if (power_save_timer_) power_save_timer_->SetEnabled(true);
 }
