@@ -21,8 +21,7 @@ void VideoApp::OnStart() {
         return;
     }
     
-    // Completely isolate video app by suspending AI/WiFi interference
-    WifiManager::GetInstance().StopStation();
+    // Completely isolate video app by suspending AI backend (keep Wi-Fi connected to avoid reconnect storms)
     Application::GetInstance().ResetProtocol(); // Disconnect MQTT completely
     
     if (auto codec = Board::GetInstance().GetAudioCodec()) {
@@ -48,7 +47,6 @@ void VideoApp::OnStart() {
             display_->ShowNotification("No Video");
         }
         if (power_save_timer_) power_save_timer_->SetEnabled(true);
-        WifiManager::GetInstance().StartStation();
     }
 }
 
@@ -59,11 +57,9 @@ void VideoApp::OnStop() {
         video_mode_ = false;
     }
     
-    // Restore AI/WiFi functions
-    WifiManager::GetInstance().StartStation();
-    
-    // Trigger activation to reconnect MQTT
+    // Trigger activation to reconnect MQTT (Wi-Fi is still connected)
     Application::GetInstance().SetDeviceState(kDeviceStateStarting);
+    Application::GetInstance().HandleNetworkConnectedEvent();
     
     if (power_save_timer_) power_save_timer_->SetEnabled(true);
 }
