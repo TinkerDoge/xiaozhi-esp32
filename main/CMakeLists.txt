@@ -805,6 +805,7 @@ elseif(CONFIG_BOARD_TYPE_AI_VOX3)
     set(DEFAULT_EMOJI_COLLECTION twemoji_64)
 elseif(CONFIG_BOARD_TYPE_DOGEPET_V2)
     set(BOARD_TYPE "dogepeV2")
+    # Apps extracted: ai_app.cc, video_app.cc
     set(BUILTIN_TEXT_FONT font_puhui_basic_16_4)
     set(BUILTIN_ICON_FONT font_awesome_16_4)
     set(DEFAULT_EMOJI_COLLECTION twemoji_32)
