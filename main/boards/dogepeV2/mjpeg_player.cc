@@ -16,7 +16,9 @@
 #include "esp_jpeg_dec.h"
 
 // MP3 simple decoder (from esp_audio_codec component)
+#include "esp_mp3_dec.h"
 #include "esp_audio_simple_dec.h"
+#include "esp_audio_simple_dec_default.h"
 
 // Resampler (from esp_audio_effects component)
 #include "esp_ae_rate_cvt.h"
@@ -160,6 +162,10 @@ bool MjpegPlayer::Start() {
     stop_requested_.store(false);
     playing_.store(true);
 
+    // Register audio decoders (only MP3 to save flash space)
+    esp_mp3_dec_register();
+    esp_audio_simple_dec_register_default();
+
     xTaskCreatePinnedToCore(
         [](void* arg) {
             auto* self = static_cast<MjpegPlayer*>(arg);
@@ -194,6 +200,9 @@ void MjpegPlayer::Stop() {
         }
         audio_task_ = nullptr;
     }
+
+    esp_audio_simple_dec_unregister_default();
+    // (We don't unregister audio_dec_default as it might be used by other parts, or it's safe to leave)
 
     ESP_LOGI(TAG, "Playback stopped");
 }
@@ -474,20 +483,37 @@ bool MjpegPlayer::DecodeAndDisplay(const uint8_t* jpeg_data, int jpeg_size) {
     int draw_h = (header.height > display_height_) ? display_height_ : header.height;
 
     // Draw directly to LCD panel in chunks to avoid DMA memory allocation errors
-    // A full 240x240 RGB565 frame is ~115KB, which exceeds internal SRAM bounce buffers.
     const int lines_per_chunk = 40; 
+    
+    // Allocate a small contiguous buffer for the chunk to fix stride mismatches
+    uint8_t* chunk_buf = (uint8_t*)malloc(draw_w * lines_per_chunk * 2);
+    if (!chunk_buf) {
+        jpeg_free_align(out_buf);
+        return false;
+    }
+
     for (int y = 0; y < draw_h; y += lines_per_chunk) {
         int chunk_h = (y + lines_per_chunk > draw_h) ? (draw_h - y) : lines_per_chunk;
         
-        // out_buf is RGB565, 2 bytes per pixel
-        uint8_t* chunk_data = out_buf + (y * header.width * 2);
+        // Copy line by line to pack the buffer contiguously (handles stride differences)
+        for (int row = 0; row < chunk_h; row++) {
+            uint8_t* src_row = out_buf + ((y + row) * header.width * 2);
+            uint8_t* dst_row = chunk_buf + (row * draw_w * 2);
+            
+            // Swap bytes for RGB565 (Little Endian to Big Endian) to fix color banding
+            for (int col = 0; col < draw_w; col++) {
+                dst_row[col * 2] = src_row[col * 2 + 1];
+                dst_row[col * 2 + 1] = src_row[col * 2];
+            }
+        }
         
         esp_lcd_panel_draw_bitmap(panel_,
                                   offset_x, offset_y + y,
                                   offset_x + draw_w, offset_y + y + chunk_h,
-                                  chunk_data);
+                                  chunk_buf);
     }
 
+    free(chunk_buf);
     jpeg_free_align(out_buf);
     return true;
 }
