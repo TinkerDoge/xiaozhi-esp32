@@ -14,6 +14,18 @@ static const char* TAG = "VideoApp";
 VideoApp::VideoApp(MjpegPlayer* player, Display* display, PowerSaveTimer* timer) 
     : mjpeg_player_(player), display_(display), power_save_timer_(timer) {}
 
+void VideoApp::OnPlaybackFinished() {
+    ESP_LOGI(TAG, "Video playback finished");
+    video_mode_ = false;
+    lvgl_port_resume();
+    if (display_) {
+        display_->SetPowerSaveMode(false);
+    }
+    if (power_save_timer_) {
+        power_save_timer_->SetEnabled(true);
+    }
+}
+
 void VideoApp::OnStart() {
     ESP_LOGI(TAG, "Starting Video App");
     if (!mjpeg_player_ || !mjpeg_player_->IsSdMounted()) {
@@ -62,7 +74,12 @@ void VideoApp::OnStop() {
         mjpeg_player_->Stop();
         video_mode_ = false;
     }
-    
+
+    lvgl_port_resume();
+    if (display_) {
+        display_->SetPowerSaveMode(false);
+    }
+
     // Restore Wi-Fi and MQTT
     WifiManager::GetInstance().StartStation();
     Application::GetInstance().SetDeviceState(kDeviceStateStarting);

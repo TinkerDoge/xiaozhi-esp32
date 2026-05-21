@@ -101,11 +101,10 @@ private:
             ESP_LOGW(TAG, "SD card not available — video player disabled");
         }
 
-        // When playback finishes, automatically switch back to AiApp
+        // When playback finishes, just restore the video UI state
         mjpeg_player_->OnFinished([this]() {
             if (current_app_ == video_app_) {
-                ESP_LOGI(TAG, "Video playback finished naturally, switching back to AI App");
-                SwitchApp();
+                video_app_->OnPlaybackFinished();
             }
         });
     }
@@ -254,6 +253,10 @@ public:
         discharging = adc_battery_monitor_->IsDischarging();
         level = adc_battery_monitor_->GetBatteryLevel();
         return true;
+    }
+
+    virtual bool IsVideoModeActive() const override {
+        return current_app_ == video_app_;
     }
 };
 

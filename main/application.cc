@@ -100,6 +100,10 @@ void Application::Initialize() {
 
     // Set network event callback for UI updates and network state handling
     board.SetNetworkEventCallback([this](NetworkEvent event, const std::string& data) {
+        if (Board::GetInstance().IsVideoModeActive()) {
+            return;
+        }
+
         auto display = Board::GetInstance().GetDisplay();
         
         switch (event) {
@@ -247,8 +251,10 @@ void Application::Run() {
 
         if (bits & MAIN_EVENT_CLOCK_TICK) {
             clock_ticks_++;
-            auto display = Board::GetInstance().GetDisplay();
-            display->UpdateStatusBar();
+            if (!Board::GetInstance().IsVideoModeActive()) {
+                auto display = Board::GetInstance().GetDisplay();
+                display->UpdateStatusBar();
+            }
         
             // Print debug info every 10 seconds
             if (clock_ticks_ % 10 == 0) {
@@ -259,6 +265,10 @@ void Application::Run() {
 }
 
 void Application::HandleNetworkConnectedEvent() {
+    if (Board::GetInstance().IsVideoModeActive()) {
+        return;
+    }
+
     ESP_LOGI(TAG, "Network connected");
     auto state = GetDeviceState();
 
@@ -284,6 +294,10 @@ void Application::HandleNetworkConnectedEvent() {
 }
 
 void Application::HandleNetworkDisconnectedEvent() {
+    if (Board::GetInstance().IsVideoModeActive()) {
+        return;
+    }
+
     // Close current conversation when network disconnected
     auto state = GetDeviceState();
     if (state == kDeviceStateConnecting || state == kDeviceStateListening || state == kDeviceStateSpeaking) {
@@ -297,6 +311,10 @@ void Application::HandleNetworkDisconnectedEvent() {
 }
 
 void Application::HandleActivationDoneEvent() {
+    if (Board::GetInstance().IsVideoModeActive()) {
+        return;
+    }
+
     ESP_LOGI(TAG, "Activation done");
 
     SystemInfo::PrintHeapStats();
@@ -672,6 +690,10 @@ void Application::StopListening() {
 }
 
 void Application::HandleToggleChatEvent() {
+    if (Board::GetInstance().IsVideoModeActive()) {
+        return;
+    }
+
     auto state = GetDeviceState();
     
     if (state == kDeviceStateActivating) {
@@ -730,6 +752,10 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
 }
 
 void Application::HandleStartListeningEvent() {
+    if (Board::GetInstance().IsVideoModeActive()) {
+        return;
+    }
+
     auto state = GetDeviceState();
     
     if (state == kDeviceStateActivating) {
@@ -763,6 +789,10 @@ void Application::HandleStartListeningEvent() {
 }
 
 void Application::HandleStopListeningEvent() {
+    if (Board::GetInstance().IsVideoModeActive()) {
+        return;
+    }
+
     auto state = GetDeviceState();
     
     if (state == kDeviceStateAudioTesting) {
@@ -778,6 +808,10 @@ void Application::HandleStopListeningEvent() {
 }
 
 void Application::HandleWakeWordDetectedEvent() {
+    if (Board::GetInstance().IsVideoModeActive()) {
+        return;
+    }
+
     if (!protocol_) {
         return;
     }
@@ -858,6 +892,10 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
 }
 
 void Application::HandleStateChangedEvent() {
+    if (Board::GetInstance().IsVideoModeActive()) {
+        return;
+    }
+
     DeviceState new_state = state_machine_.GetState();
     clock_ticks_ = 0;
 
@@ -1022,6 +1060,10 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
 }
 
 void Application::WakeWordInvoke(const std::string& wake_word) {
+    if (Board::GetInstance().IsVideoModeActive()) {
+        return;
+    }
+
     if (!protocol_) {
         return;
     }

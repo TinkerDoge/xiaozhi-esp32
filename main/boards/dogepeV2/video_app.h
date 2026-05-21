@@ -18,4 +18,5 @@ public:
     
     void OnStart() override;
     void OnStop() override;
+    void OnPlaybackFinished();
 };
